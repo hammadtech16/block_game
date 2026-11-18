@@ -5,6 +5,7 @@ import android.graphics.Paint
 import android.graphics.Path
 import kotlin.math.PI
 import kotlin.math.cos
+import kotlin.math.min
 import kotlin.math.sin
 import kotlin.random.Random
 
@@ -215,10 +216,10 @@ class Particle(
             val count = (12 * intensity).toInt()
             
             for (i in 0 until count) {
-                val angle = (i * 360f / count + Random.nextFloat() * 15f) * PI / 180f
+                val angle = (i * 360f / count + Random.nextFloat() * 15f) * PI.toFloat() / 180f
                 val speed = (150f + Random.nextFloat() * 400f) * intensity
-                val px = speed * cos(angle)
-                val py = speed * sin(angle)
+                val px = (speed * cos(angle)).toFloat()
+                val py = (speed * sin(angle)).toFloat()
                 val size = 3f + Random.nextFloat() * 5f
                 
                 when (Random.nextInt(4)) {
@@ -242,10 +243,10 @@ class Particle(
             for (ring in 1..rings) {
                 val ringParticles = 16 + ring * 8
                 for (i in 0 until ringParticles) {
-                    val angle = (i * 360f / ringParticles) * PI / 180f
+                    val angle = (i * 360f / ringParticles) * PI.toFloat() / 180f
                     val speed = 200f + ring * 100f + Random.nextFloat() * 100f
-                    val px = speed * cos(angle)
-                    val py = speed * sin(angle)
+                    val px = (speed * cos(angle)).toFloat()
+                    val py = (speed * sin(angle)).toFloat()
                     val size = 4f + Random.nextFloat() * 4f
                     particles.add(Particle(x, y, color, px, py, size, ParticleType.SPARK))
                 }
