@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">Block Game</string>
+    <string name="level_completed">Level Completed!</string>
+    <string name="game_over">Game Over</string>
+    <string name="score">Score: %1$d</string>
+    <string name="level">Level: %1$d</string>
+    <string name="tap_to_start">Tap to Start</string>
+    <string name="tap_to_continue">Tap to Continue</string>
+    <string name="points_earned">Points Earned: %1$d</string>
+    <string name="total_score">Total Score: %1$d</string>
+</resources>
