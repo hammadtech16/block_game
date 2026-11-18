@@ -24,7 +24,7 @@ import kotlin.random.Random
 class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
 
     // Game state
-    private var gameState = GameState.PLAYING
+    private var gameState = GameState.HOME
     private var score = 0
     private var level = 1
     private var levelScore = 0
@@ -42,6 +42,9 @@ class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
     private var levelTransitionProgress: Float = 0f
     private var isLevelTransitioning = false
 
+    // Theme
+    private var isDarkTheme = true
+
     // Game objects
     private val blocks = mutableListOf<Block>()
     private val particles = mutableListOf<Particle>()
@@ -58,6 +61,10 @@ class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
     // Shooting
     private var lastShotTime = 0L
     private val shotCooldown = 300L // ms between shots
+    private var isLongPressShooting = false
+    private var longPressStartTime = 0L
+    private val longPressDelay = 200L // ms before continuous shooting starts
+    private var strikerTouching = false
 
     // Shape statistics
     private val shapeStats = mutableMapOf<BlockShape, Int>().apply {
@@ -98,24 +105,66 @@ class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
     // Striker: white #FBFAFD
     // Text: white/light gray
     
-    private val COLOR_BG_DEEPEST = 0xFF01020E.toInt()    // Top bar
-    private val COLOR_BG_DARK = 0xFF0B1022.toInt()      // Game area
-    private val COLOR_BG_CARD = 0xFF030612.toInt()      // Cards
-    private val COLOR_BG_CARD_LIGHT = 0xFF040512.toInt() // Card variant
-    private val COLOR_TEAL_ACCENT = 0xFF194C61.toInt()  // Teal accent
-    private val COLOR_TEAL_BRIGHT = 0xFF2A7A9A.toInt()  // Brighter teal
+    // Dark theme colors
+    private val COLOR_BG_DEEPEST_DARK = 0xFF01020E.toInt()    // Top bar
+    private val COLOR_BG_DARK_DARK = 0xFF0B1022.toInt()      // Game area
+    private val COLOR_BG_CARD_DARK = 0xFF030612.toInt()      // Cards
+    private val COLOR_BG_CARD_LIGHT_DARK = 0xFF040512.toInt() // Card variant
+    private val COLOR_TEAL_ACCENT_DARK = 0xFF194C61.toInt()  // Teal accent
+    private val COLOR_TEAL_BRIGHT_DARK = 0xFF2A7A9A.toInt()  // Brighter teal
+    private val COLOR_TEXT_PRIMARY_DARK = 0xFFFFFFFF.toInt()  // White text
+    private val COLOR_TEXT_SECONDARY_DARK = 0xFF8A8FA5.toInt() // Muted text
+    private val COLOR_TEXT_MUTED_DARK = 0xFF5A5F7A.toInt()    // More muted
+    
+    // Light theme colors
+    private val COLOR_BG_DEEPEST_LIGHT = 0xFFF0F4F8.toInt()
+    private val COLOR_BG_DARK_LIGHT = 0xFFE2E8F0.toInt()
+    private val COLOR_BG_CARD_LIGHT = 0xFFFFFFFF.toInt()
+    private val COLOR_BG_CARD_LIGHT_LIGHT = 0xFFF7FAFC.toInt()
+    private val COLOR_TEAL_ACCENT_LIGHT = 0xFF0D9488.toInt()
+    private val COLOR_TEAL_BRIGHT_LIGHT = 0xFF14B8A6.toInt()
+    private val COLOR_TEXT_PRIMARY_LIGHT = 0xFF1E293B.toInt()
+    private val COLOR_TEXT_SECONDARY_LIGHT = 0xFF64748B.toInt()
+    private val COLOR_TEXT_MUTED_LIGHT = 0xFF94A3B8.toInt()
+    
+    // Shared colors
     private val COLOR_GREEN_DANGER = 0xFF41D443.toInt() // Bright green (danger/progress)
     private val COLOR_GREEN_DARK = 0xFF2B5149.toInt()   // Dark green (progress bg)
+    private val COLOR_GREEN_DARK_LIGHT = 0xFF86EFAC.toInt() // Light theme progress bg
     private val COLOR_STRIKER_WHITE = 0xFFFBFAFD.toInt() // White striker
-    private val COLOR_TEXT_PRIMARY = 0xFFFFFFFF.toInt()  // White text
-    private val COLOR_TEXT_SECONDARY = 0xFF8A8FA5.toInt() // Muted text
-    private val COLOR_TEXT_MUTED = 0xFF5A5F7A.toInt()    // More muted
     private val COLOR_WHITE = 0xFFFFFFFF.toInt()
     private val COLOR_BLACK = 0xFF000000.toInt()
 
+    // Theme-aware color getters
+    private val colorBgDeepest: Int
+        get() = if (isDarkTheme) COLOR_BG_DEEPEST_DARK else COLOR_BG_DEEPEST_LIGHT
+    private val colorBgDark: Int
+        get() = if (isDarkTheme) COLOR_BG_DARK_DARK else COLOR_BG_DARK_LIGHT
+    private val colorBgCard: Int
+        get() = if (isDarkTheme) COLOR_BG_CARD_DARK else COLOR_BG_CARD_LIGHT
+    private val colorBgCardLight: Int
+        get() = if (isDarkTheme) COLOR_BG_CARD_LIGHT_DARK else COLOR_BG_CARD_LIGHT_LIGHT
+    private val colorTealAccent: Int
+        get() = if (isDarkTheme) COLOR_TEAL_ACCENT_DARK else COLOR_TEAL_ACCENT_LIGHT
+    private val colorTealBright: Int
+        get() = if (isDarkTheme) COLOR_TEAL_BRIGHT_DARK else COLOR_TEAL_BRIGHT_LIGHT
+    private val colorTextPrimary: Int
+        get() = if (isDarkTheme) COLOR_TEXT_PRIMARY_DARK else COLOR_TEXT_PRIMARY_LIGHT
+    private val colorTextSecondary: Int
+        get() = if (isDarkTheme) COLOR_TEXT_SECONDARY_DARK else COLOR_TEXT_SECONDARY_LIGHT
+    private val colorTextMuted: Int
+        get() = if (isDarkTheme) COLOR_TEXT_MUTED_DARK else COLOR_TEXT_MUTED_LIGHT
+    private val colorGreenDark: Int
+        get() = if (isDarkTheme) COLOR_GREEN_DARK else COLOR_GREEN_DARK_LIGHT
+    private val colorGrid: Int
+        get() = if (isDarkTheme) 0xFF0D1428.toInt() else 0xFFE2E8F0.toInt()
+    private val colorPatternDot: Int
+        get() = if (isDarkTheme) 0xFF0D1428.toInt() else 0xFFCBD5E1.toInt()
+    private val colorDangerLine: Int = COLOR_GREEN_DANGER
+
     // Paint objects
     private val scorePaint = Paint().apply {
-        color = COLOR_TEXT_PRIMARY
+        color = colorTextPrimary
         textSize = 36f
         isAntiAlias = true
         textAlign = Paint.Align.LEFT
@@ -123,14 +172,14 @@ class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
     }
 
     private val levelPaint = Paint().apply {
-        color = COLOR_TEXT_SECONDARY
+        color = colorTextSecondary
         textSize = 24f
         isAntiAlias = true
         textAlign = Paint.Align.RIGHT
     }
 
     private val titlePaint = Paint().apply {
-        color = COLOR_TEXT_PRIMARY
+        color = colorTextPrimary
         textSize = 56f
         isAntiAlias = true
         textAlign = Paint.Align.CENTER
@@ -138,20 +187,20 @@ class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
     }
 
     private val subtitlePaint = Paint().apply {
-        color = COLOR_TEXT_SECONDARY
+        color = colorTextSecondary
         textSize = 22f
         isAntiAlias = true
         textAlign = Paint.Align.CENTER
     }
 
     private val buttonPaint = Paint().apply {
-        color = COLOR_TEAL_ACCENT
+        color = colorTealAccent
         isAntiAlias = true
         style = Paint.Style.FILL
     }
 
     private val buttonTextPaint = Paint().apply {
-        color = COLOR_TEXT_PRIMARY
+        color = colorTextPrimary
         textSize = 24f
         isAntiAlias = true
         textAlign = Paint.Align.CENTER
@@ -167,29 +216,29 @@ class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
     }
 
     private val backgroundPaint = Paint().apply {
-        color = COLOR_BG_DARK
+        color = colorBgDark
     }
 
     private val gridPaint = Paint().apply {
-        color = 0xFF0D1428.toInt()
+        color = colorGrid
         strokeWidth = 0.5f
         isAntiAlias = true
     }
 
     private val dangerLinePaint = Paint().apply {
-        color = COLOR_GREEN_DANGER
+        color = colorDangerLine
         strokeWidth = 2f
         isAntiAlias = true
         style = Paint.Style.STROKE
     }
 
     private val cardPaint = Paint().apply {
-        color = COLOR_BG_CARD
+        color = colorBgCard
         isAntiAlias = true
     }
 
     private val cardBorderPaint = Paint().apply {
-        color = COLOR_TEAL_ACCENT
+        color = colorTealAccent
         isAntiAlias = true
         style = Paint.Style.STROKE
         strokeWidth = 1f
@@ -202,7 +251,7 @@ class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
     }
 
     private val progressBgPaint = Paint().apply {
-        color = COLOR_GREEN_DARK
+        color = colorGreenDark
         isAntiAlias = true
         style = Paint.Style.FILL
     }
@@ -221,11 +270,24 @@ class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
     private var isInitialized = false
     private var dpScale = 1f
 
+    // Home page button rects (for touch hit-testing)
+    private var homeLevelBtn = RectF()
+    private var homeLevelsBtn = RectF()
+    private var homeThemeBtn = RectF()
+
+    // Level complete home button rect (for touch hit-testing)
+    private var levelCompleteHomeBtn = RectF()
+
+    // Level select button rects (for touch hit-testing)
+    private var levelSelectHomeBtn = RectF()
+    private val levelSelectBtns = mutableListOf<RectF>()
+
     enum class GameState {
+        HOME,
         PLAYING,
         GAME_OVER,
         LEVEL_COMPLETE,
-        WAITING_START
+        LEVEL_SELECT
     }
 
     init {
@@ -256,11 +318,11 @@ class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
         blocks.clear()
         particles.clear()
         projectiles.clear()
-        gameState = GameState.WAITING_START
         overlayAlpha = 0f
         popupScale = 0f
         popupTargetScale = 1f
         lastShotTime = 0
+        isLongPressShooting = false
         
         // Reset stats
         for (shape in BlockShape.values()) {
@@ -273,8 +335,8 @@ class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
         striker = Striker(
             x = screenWidth / 2,
             y = strikerY,
-            width = 70 * dpScale,
-            height = 90 * dpScale
+            width = 95 * dpScale,
+            height = 120 * dpScale
         )
 
         spawnInterval = 2.0f
@@ -284,7 +346,7 @@ class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
     }
 
     fun startGame() {
-        if (gameState == GameState.WAITING_START || gameState == GameState.GAME_OVER) {
+        if (gameState == GameState.HOME || gameState == GameState.GAME_OVER || gameState == GameState.LEVEL_SELECT) {
             initializeGame()
             gameState = GameState.PLAYING
             lastFrameTime = System.nanoTime()
@@ -349,14 +411,12 @@ class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
         // Draw UI
         drawGameUI(canvas)
 
-        // Draw shape statistics
-        drawShapeStats(canvas)
-
         // Draw state overlays with animations
         when (gameState) {
-            GameState.WAITING_START -> drawStartOverlay(canvas)
+            GameState.HOME -> drawStartOverlay(canvas)
             GameState.GAME_OVER -> drawGameOverOverlay(canvas)
             GameState.LEVEL_COMPLETE -> drawLevelCompleteOverlay(canvas)
+            GameState.LEVEL_SELECT -> drawLevelSelectOverlay(canvas)
             GameState.PLAYING -> {} // No overlay during gameplay
         }
 
@@ -373,7 +433,7 @@ class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
         // Top bar area - deepest dark
         val topGradient = LinearGradient(
             0f, 0f, 0f, gameAreaTop,
-            intArrayOf(COLOR_BG_DEEPEST, COLOR_BG_DEEPEST),
+            intArrayOf(colorBgDeepest, colorBgDeepest),
             null,
             Shader.TileMode.CLAMP
         )
@@ -383,7 +443,7 @@ class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
         // Game area - dark blue
         val gameGradient = LinearGradient(
             0f, gameAreaTop, 0f, gameAreaBottom,
-            intArrayOf(0xFF0C1226.toInt(), COLOR_BG_DARK, 0xFF0A0F1E.toInt()),
+            intArrayOf(0xFF0C1226.toInt(), colorBgDark, 0xFF0A0F1E.toInt()),
             floatArrayOf(0f, 0.5f, 1f),
             Shader.TileMode.CLAMP
         )
@@ -393,7 +453,7 @@ class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
         // Bottom area - deepest dark
         val bottomGradient = LinearGradient(
             0f, gameAreaBottom, 0f, screenHeight,
-            intArrayOf(COLOR_BG_DEEPEST, COLOR_BG_DEEPEST),
+            intArrayOf(colorBgDeepest, colorBgDeepest),
             null,
             Shader.TileMode.CLAMP
         )
@@ -411,7 +471,7 @@ class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
 
     private fun drawPatternDots(canvas: Canvas) {
         val dotPaint = Paint().apply {
-            color = 0xFF0D1428.toInt()
+            color = colorPatternDot
             isAntiAlias = true
             style = Paint.Style.FILL
         }
@@ -442,7 +502,7 @@ class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
 
     private fun drawTopAccentLine(canvas: Canvas) {
         val linePaint = Paint().apply {
-            color = COLOR_TEAL_ACCENT
+            color = colorTealAccent
             strokeWidth = 1.5f * dpScale
             isAntiAlias = true
             alpha = 180
@@ -461,7 +521,7 @@ class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
     private fun drawGrid(canvas: Canvas) {
         val spacing = 50 * dpScale
         val linePaint = Paint().apply {
-            color = 0xFF0D1428.toInt()
+            color = colorGrid
             strokeWidth = 0.5f
             isAntiAlias = true
         }
@@ -498,7 +558,7 @@ class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
             drawDash = !drawDash
         }
         
-        dangerLinePaint.color = COLOR_GREEN_DANGER
+        dangerLinePaint.color = colorDangerLine
         dangerLinePaint.strokeWidth = 2.5f * dpScale
         dangerLinePaint.alpha = (180 + 70 * kotlin.math.sin(animationTime * 5f)).toInt()
         canvas.drawPath(dashPath, dangerLinePaint)
@@ -507,14 +567,14 @@ class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
         val glowPaint = Paint().apply {
             isAntiAlias = true
             style = Paint.Style.FILL
-            color = COLOR_GREEN_DANGER
+            color = colorDangerLine
             alpha = (20 + 15 * kotlin.math.sin(animationTime * 5f)).toInt()
         }
         canvas.drawRect(0f, lineY, screenWidth, strikerY + 15 * dpScale, glowPaint)
         
         // Warning text
         val warningPaint = Paint().apply {
-            color = COLOR_GREEN_DANGER
+            color = colorDangerLine
             textSize = 14 * dpScale
             isAntiAlias = true
             textAlign = Paint.Align.CENTER
@@ -540,7 +600,7 @@ class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
         
         // Score text
         val labelPaint = Paint().apply {
-            color = COLOR_TEXT_MUTED
+            color = colorTextMuted
             textSize = 13 * dpScale
             isAntiAlias = true
             textAlign = Paint.Align.LEFT
@@ -549,7 +609,7 @@ class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
         }
         val valuePaint = Paint(scorePaint).apply { 
             textSize = 28 * dpScale 
-            color = COLOR_TEXT_PRIMARY
+            color = colorTextPrimary
         }
         
         canvas.drawText("SCORE", scoreCardRect.left + 18 * dpScale, scoreCardRect.top + 22 * dpScale, labelPaint)
@@ -577,14 +637,14 @@ class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
         canvas.drawRoundRect(rect, radius, radius, cardPaint)
         
         // Card border - teal accent
-        cardBorderPaint.color = COLOR_TEAL_ACCENT
+        cardBorderPaint.color = colorTealAccent
         cardBorderPaint.strokeWidth = 1.5f * dpScale
         cardBorderPaint.alpha = 150
         canvas.drawRoundRect(rect, radius, radius, cardBorderPaint)
         
         // Top accent line
         val accentLine = Paint().apply {
-            color = COLOR_TEAL_BRIGHT
+            color = colorTealBright
             strokeWidth = 3 * dpScale
             isAntiAlias = true
             alpha = 220
@@ -594,7 +654,7 @@ class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
         
         // Subtle inner glow at top
         val innerGlow = Paint().apply {
-            color = COLOR_TEAL_ACCENT
+            color = colorTealAccent
             isAntiAlias = true
             alpha = 30
         }
@@ -621,14 +681,14 @@ class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
             canvas.drawRoundRect(progressRect, radius, radius, progressPaint)
             
             // Progress glow
-            progressPaint.setShadowLayer(6 * dpScale, 0f, 0f, COLOR_GREEN_DANGER)
+            progressPaint.setShadowLayer(6 * dpScale, 0f, 0f, colorDangerLine)
             canvas.drawRoundRect(progressRect, radius, radius, progressPaint)
             progressPaint.clearShadowLayer()
         }
         
         // Progress text
         val progressTextPaint = Paint().apply {
-            color = COLOR_TEXT_MUTED
+            color = colorTextMuted
             textSize = 12 * dpScale
             isAntiAlias = true
             textAlign = Paint.Align.CENTER
@@ -640,7 +700,7 @@ class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
         if (comboCount > 1 && System.currentTimeMillis() - lastComboTime < 2000) {
             val alpha = (1f - (System.currentTimeMillis() - lastComboTime) / 2000f)
             comboPaint.alpha = (255 * alpha).toInt()
-            comboPaint.setShadowLayer(8 * dpScale, 0f, 0f, COLOR_GREEN_DANGER)
+            comboPaint.setShadowLayer(8 * dpScale, 0f, 0f, colorDangerLine)
             
             val y = gameAreaTop + 80 * dpScale
             canvas.drawText("COMBO x$comboCount!", screenWidth / 2, y, comboPaint)
@@ -655,14 +715,14 @@ class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
         if (total == 0) return
         
         val statsPaint = Paint().apply {
-            color = COLOR_TEXT_SECONDARY
+            color = colorTextSecondary
             textSize = 11 * dpScale
             isAntiAlias = true
             textAlign = Paint.Align.LEFT
         }
         
         val statsValuePaint = Paint().apply {
-            color = COLOR_TEXT_PRIMARY
+            color = colorTextPrimary
             textSize = 11 * dpScale
             isAntiAlias = true
             textAlign = Paint.Align.RIGHT
@@ -676,7 +736,7 @@ class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
         
         // Title
         val titlePaint = Paint().apply {
-            color = COLOR_TEAL_ACCENT
+            color = colorTealAccent
             textSize = 13 * dpScale
             isAntiAlias = true
             textAlign = Paint.Align.LEFT
@@ -711,7 +771,7 @@ class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
         
         // Total
         val totalPaint = Paint().apply {
-            color = COLOR_TEAL_BRIGHT
+            color = colorTealBright
             textSize = 12 * dpScale
             isAntiAlias = true
             textAlign = Paint.Align.LEFT
@@ -735,111 +795,148 @@ class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
         canvas.scale(popupScale, popupScale)
         canvas.translate(-screenWidth / 2, -screenHeight / 2)
         
-        drawStartPopup(canvas)
+        drawHomePage(canvas)
         canvas.restore()
     }
 
-    private fun drawStartPopup(canvas: Canvas) {
-        val popupWidth = screenWidth * 0.88f
-        val popupHeight = screenHeight * 0.58f
-        val popupX = (screenWidth - popupWidth) / 2
-        val popupY = (screenHeight - popupHeight) / 2
-        val radius = 24 * dpScale
-        
-        val popupRect = RectF(popupX, popupY, popupX + popupWidth, popupY + popupHeight)
-        
-        // Shadow
-        val shadowPaint = Paint().apply {
-            color = COLOR_BLACK
-            isAntiAlias = true
-            setShadowLayer(25 * dpScale, 0f, 8 * dpScale, 0x80000000.toInt())
-        }
-        canvas.drawRoundRect(popupRect, radius, radius, shadowPaint)
-        
-        // Background - dark card
-        val popupBgPaint = Paint().apply {
-            color = COLOR_BG_CARD
-            isAntiAlias = true
-        }
-        canvas.drawRoundRect(popupRect, radius, radius, popupBgPaint)
-        
-        // Border - teal
-        cardBorderPaint.color = COLOR_TEAL_ACCENT
-        cardBorderPaint.strokeWidth = 1.5f * dpScale
-        cardBorderPaint.alpha = 200
-        canvas.drawRoundRect(popupRect, radius, radius, cardBorderPaint)
-        
-        // Top accent bar - teal gradient
-        val accentRect = RectF(popupX, popupY, popupX + popupWidth, popupY + 4 * dpScale)
-        val accentPaint = Paint().apply {
-            isAntiAlias = true
+    private fun drawHomePage(canvas: Canvas) {
+        // Soft gradient background top to bottom
+        val bgPaint = Paint().apply {
             shader = LinearGradient(
-                popupX, popupY, popupX + popupWidth, popupY,
-                intArrayOf(COLOR_TEAL_ACCENT, COLOR_TEAL_BRIGHT, COLOR_GREEN_DANGER),
+                0f, 0f, 0f, screenHeight,
+                intArrayOf(colorBgDeepest, colorBgDark),
                 null, Shader.TileMode.CLAMP
             )
         }
-        canvas.drawRect(accentRect, accentPaint)
-        
-        // Title
-        canvas.drawText("BLOCK GAME", screenWidth / 2, popupY + 90 * dpScale, titlePaint)
-        
-        // Subtitle
-        canvas.drawText("Tap matching colors to destroy blocks", screenWidth / 2, popupY + 135 * dpScale, subtitlePaint)
-        canvas.drawText("Don't let them reach the danger zone!", screenWidth / 2, popupY + 165 * dpScale, subtitlePaint)
-        
-        // Feature list
-        val featurePaint = Paint().apply {
-            color = COLOR_TEXT_PRIMARY
-            textSize = 18 * dpScale
+        canvas.drawRect(0f, 0f, screenWidth, screenHeight, bgPaint)
+
+        // Subtle pattern dots
+        val dotPaint = Paint().apply {
+            color = colorPatternDot
             isAntiAlias = true
-            textAlign = Paint.Align.LEFT
+            style = Paint.Style.FILL
         }
-        val features = listOf(
-            "▸ Match 2+ same colors to clear",
-            "▸ Combos give bonus points",
-            "▸ 6 shapes × 8 colors",
-            "▸ Progressive difficulty"
+        val spacing = (70 * dpScale).toInt()
+        var x = 0f
+        while (x <= screenWidth) {
+            var y = 0f
+            while (y <= screenHeight) {
+                canvas.drawCircle(x, y, 0.5f * dpScale, dotPaint)
+                y += spacing
+            }
+            x += spacing
+        }
+
+        val centerX = screenWidth / 2
+        val centerY = screenHeight * 0.42f
+
+        // Center icon - large stylized block
+        val iconSize = 90f * dpScale
+        val iconPaint = Paint().apply {
+            isAntiAlias = true
+            style = Paint.Style.FILL
+            shader = LinearGradient(
+                centerX - iconSize / 2, centerY - iconSize / 2,
+                centerX + iconSize / 2, centerY + iconSize / 2,
+                intArrayOf(colorTealAccent, colorTealBright, colorDangerLine),
+                null, Shader.TileMode.CLAMP
+            )
+        }
+        val iconPath = Path()
+        val h = iconSize / 2
+        iconPath.moveTo(centerX, centerY - h)
+        iconPath.lineTo(centerX + h * 0.6f, centerY + h * 0.3f)
+        iconPath.lineTo(centerX, centerY + h)
+        iconPath.lineTo(centerX - h * 0.6f, centerY + h * 0.3f)
+        iconPath.close()
+        canvas.drawPath(iconPath, iconPaint)
+
+        // Icon glow
+        val glowPaint = Paint().apply {
+            isAntiAlias = true
+            color = colorTealAccent
+            alpha = 60
+            setShadowLayer(24f, 0f, 0f, colorTealAccent)
+        }
+        canvas.drawPath(iconPath, glowPaint)
+
+        // Title
+        canvas.drawText("BLOCK GAME", centerX, centerY + 120 * dpScale, titlePaint)
+        canvas.drawText("Match colors • Destroy blocks", centerX, centerY + 150 * dpScale, subtitlePaint)
+
+        // Buttons area
+        val buttonWidth = 260f * dpScale
+        val buttonHeight = 56f * dpScale
+        val buttonGap = 16f * dpScale
+        val startY = centerY + 210 * dpScale
+
+        // Current level button
+        homeLevelBtn = RectF(
+            centerX - buttonWidth / 2, startY,
+            centerX + buttonWidth / 2, startY + buttonHeight
         )
-        features.forEachIndexed { index, feature ->
-            canvas.drawText(feature, popupX + 35 * dpScale, popupY + 220 * dpScale + index * 35 * dpScale, featurePaint)
+        drawHomeButton(canvas, homeLevelBtn, "LEVEL: $level", colorTealAccent)
+
+        // Levels button
+        homeLevelsBtn = RectF(
+            centerX - buttonWidth / 2, startY + buttonHeight + buttonGap,
+            centerX + buttonWidth / 2, startY + buttonHeight * 2 + buttonGap
+        )
+        drawHomeButton(canvas, homeLevelsBtn, "LEVELS", colorTextPrimary)
+
+        // Change theme button
+        homeThemeBtn = RectF(
+            centerX - buttonWidth / 2, startY + (buttonHeight + buttonGap) * 2,
+            centerX + buttonWidth / 2, startY + (buttonHeight * 2 + buttonGap * 2)
+        )
+        val themeLabel = if (isDarkTheme) "THEME: DARK" else "THEME: LIGHT"
+        drawHomeButton(canvas, homeThemeBtn, themeLabel, colorTextSecondary)
+
+        // Start game hint
+        val hintPaint = Paint().apply {
+            color = colorTextMuted
+            textSize = 15 * dpScale
+            isAntiAlias = true
+            textAlign = Paint.Align.CENTER
+            alpha = (120 + 60 * kotlin.math.sin(animationTime * 3f)).toInt()
         }
-        
-        // Start button
-        val buttonWidth = 200 * dpScale
-        val buttonHeight = 52 * dpScale
-        val buttonX = (screenWidth - buttonWidth) / 2
-        val buttonY = popupY + popupHeight - 90 * dpScale
-        val buttonRect = RectF(buttonX, buttonY, buttonX + buttonWidth, buttonY + buttonHeight)
-        val buttonRadius = buttonHeight / 2
-        
-        // Button background - teal
-        buttonPaint.color = COLOR_TEAL_ACCENT
-        buttonPaint.setShadowLayer(10 * dpScale, 0f, 4 * dpScale, 0x60194C61.toInt())
-        canvas.drawRoundRect(buttonRect, buttonRadius, buttonRadius, buttonPaint)
-        buttonPaint.clearShadowLayer()
-        
+        canvas.drawText("Tap any button to begin", centerX, startY + (buttonHeight + buttonGap) * 3 + 40 * dpScale, hintPaint)
+    }
+
+    private fun drawHomeButton(canvas: Canvas, rect: RectF, label: String, textColor: Int) {
+        val radius = rect.height() / 2
+        // Button background
+        val bgPaint = Paint().apply {
+            color = colorBgCard
+            isAntiAlias = true
+        }
+        canvas.drawRoundRect(rect, radius, radius, bgPaint)
         // Button border
-        val buttonBorderPaint = Paint().apply {
-            color = COLOR_TEAL_BRIGHT
+        val borderPaint = Paint().apply {
+            color = colorTealAccent
             isAntiAlias = true
             style = Paint.Style.STROKE
             strokeWidth = 1.5f * dpScale
             alpha = 200
         }
-        canvas.drawRoundRect(buttonRect, buttonRadius, buttonRadius, buttonBorderPaint)
-        
-        canvas.drawText("TAP TO START", screenWidth / 2, buttonY + buttonHeight * 0.62f, buttonTextPaint)
-        
-        // Animated hint
-        val hintPaint = Paint().apply {
-            color = COLOR_TEXT_MUTED
-            textSize = 14 * dpScale
+        canvas.drawRoundRect(rect, radius, radius, borderPaint)
+        // Top accent
+        val accent = Paint().apply {
+            color = colorTealBright
+            strokeWidth = 3 * dpScale
+            isAntiAlias = true
+            alpha = 220
+        }
+        canvas.drawRect(rect.left, rect.top, rect.right, rect.top + 3 * dpScale, accent)
+        // Label
+        val labelPaint = Paint().apply {
+            color = textColor
+            textSize = 20 * dpScale
             isAntiAlias = true
             textAlign = Paint.Align.CENTER
-            alpha = (120 + 60 * kotlin.math.sin(animationTime * 3f)).toInt()
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
         }
-        canvas.drawText("Touch and drag to move the striker", screenWidth / 2, buttonY + buttonHeight + 25 * dpScale, hintPaint)
+        canvas.drawText(label, rect.centerX(), rect.centerY() + 8 * dpScale, labelPaint)
     }
 
     private fun drawGameOverOverlay(canvas: Canvas) {
@@ -877,7 +974,7 @@ class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
         
         // Background - very dark
         val popupBgPaint = Paint().apply {
-            color = COLOR_BG_DEEPEST
+            color = colorBgDeepest
             isAntiAlias = true
         }
         canvas.drawRoundRect(popupRect, radius, radius, popupBgPaint)
@@ -885,7 +982,7 @@ class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
         // Top accent bar - danger green
         val accentRect = RectF(popupX, popupY, popupX + popupWidth, popupY + 4 * dpScale)
         val accentPaint = Paint().apply {
-            color = COLOR_GREEN_DANGER
+            color = colorDangerLine
             isAntiAlias = true
         }
         canvas.drawRect(accentRect, accentPaint)
@@ -902,7 +999,7 @@ class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
         
         // Stats
         val statPaint = Paint().apply {
-            color = COLOR_TEXT_PRIMARY
+            color = colorTextPrimary
             textSize = 26 * dpScale
             isAntiAlias = true
             textAlign = Paint.Align.CENTER
@@ -910,7 +1007,7 @@ class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
         }
         
         val labelPaint = Paint().apply {
-            color = COLOR_TEXT_MUTED
+            color = colorTextMuted
             textSize = 16 * dpScale
             isAntiAlias = true
             textAlign = Paint.Align.CENTER
@@ -933,7 +1030,7 @@ class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
         val buttonRadius = buttonHeight / 2
         
         // Button background - danger green
-        buttonPaint.color = COLOR_GREEN_DANGER
+        buttonPaint.color = colorDangerLine
         buttonPaint.setShadowLayer(10 * dpScale, 0f, 4 * dpScale, 0x6041D443.toInt())
         canvas.drawRoundRect(buttonRect, buttonRadius, buttonRadius, buttonPaint)
         buttonPaint.clearShadowLayer()
@@ -954,7 +1051,7 @@ class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
     private fun drawSkullIcon(canvas: Canvas, cx: Float, cy: Float) {
         val size = 45 * dpScale
         val paint = Paint().apply {
-            color = COLOR_GREEN_DANGER
+            color = colorDangerLine
             isAntiAlias = true
             style = Paint.Style.FILL
             alpha = 200
@@ -965,7 +1062,7 @@ class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
         canvas.drawRect(cx - size * 0.32f, cy + size * 0.18f, cx + size * 0.32f, cy + size * 0.45f, paint) // Jaw
         
         // Eyes
-        paint.color = COLOR_BG_DEEPEST
+        paint.color = colorBgDeepest
         canvas.drawCircle(cx - size * 0.14f, cy - size * 0.1f, size * 0.07f, paint)
         canvas.drawCircle(cx + size * 0.14f, cy - size * 0.1f, size * 0.07f, paint)
         
@@ -1008,18 +1105,18 @@ class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
         
         // Background - dark card
         val popupBgPaint = Paint().apply {
-            color = COLOR_BG_CARD
+            color = colorBgCard
             isAntiAlias = true
         }
         canvas.drawRoundRect(popupRect, radius, radius, popupBgPaint)
         
         // Border - success green
-        cardBorderPaint.color = COLOR_GREEN_DANGER
+        cardBorderPaint.color = colorDangerLine
         cardBorderPaint.strokeWidth = 2 * dpScale
         cardBorderPaint.alpha = 220
         canvas.drawRoundRect(popupRect, radius, radius, cardBorderPaint)
         cardBorderPaint.strokeWidth = 1.5f * dpScale
-        cardBorderPaint.color = COLOR_TEAL_ACCENT
+        cardBorderPaint.color = colorTealAccent
         cardBorderPaint.alpha = 150
         
         // Top accent bar - success gradient
@@ -1028,7 +1125,7 @@ class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
             isAntiAlias = true
             shader = LinearGradient(
                 popupX, popupY, popupX + popupWidth, popupY,
-                intArrayOf(COLOR_GREEN_DANGER, 0xFF6AFF6C.toInt(), COLOR_TEAL_BRIGHT),
+                intArrayOf(colorDangerLine, 0xFF6AFF6C.toInt(), colorTealBright),
                 null, Shader.TileMode.CLAMP
             )
         }
@@ -1036,14 +1133,14 @@ class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
         
         // Level Complete title
         val completePaint = Paint(titlePaint).apply {
-            color = COLOR_GREEN_DANGER
+            color = colorDangerLine
             textSize = 38 * dpScale
         }
         canvas.drawText("LEVEL COMPLETE!", screenWidth / 2, popupY + 90 * dpScale, completePaint)
         
         // Level number
         val levelNumPaint = Paint().apply {
-            color = COLOR_TEXT_SECONDARY
+            color = colorTextSecondary
             textSize = 22 * dpScale
             isAntiAlias = true
             textAlign = Paint.Align.CENTER
@@ -1063,29 +1160,29 @@ class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
         }
         canvas.drawText("+$levelScore", screenWidth / 2, popupY + 300 * dpScale, pointsPaint)
         canvas.drawText("POINTS EARNED", screenWidth / 2, popupY + 335 * dpScale,
-            Paint().apply { color = COLOR_TEXT_MUTED; textSize = 16 * dpScale; isAntiAlias = true; textAlign = Paint.Align.CENTER })
+            Paint().apply { color = colorTextMuted; textSize = 16 * dpScale; isAntiAlias = true; textAlign = Paint.Align.CENTER })
         
         // Total score
         canvas.drawText("Total Score: $score", screenWidth / 2, popupY + 375 * dpScale,
-            Paint().apply { color = COLOR_TEXT_PRIMARY; textSize = 22 * dpScale; isAntiAlias = true; textAlign = Paint.Align.CENTER })
+            Paint().apply { color = colorTextPrimary; textSize = 22 * dpScale; isAntiAlias = true; textAlign = Paint.Align.CENTER })
         
         // Continue button
         val buttonWidth = 220 * dpScale
         val buttonHeight = 52 * dpScale
         val buttonX = (screenWidth - buttonWidth) / 2
-        val buttonY = popupY + popupHeight - 90 * dpScale
+        val buttonY = popupY + popupHeight - 132 * dpScale
         val buttonRect = RectF(buttonX, buttonY, buttonX + buttonWidth, buttonY + buttonHeight)
         val buttonRadius = buttonHeight / 2
         
         // Button background - teal
-        buttonPaint.color = COLOR_TEAL_ACCENT
+        buttonPaint.color = colorTealAccent
         buttonPaint.setShadowLayer(10 * dpScale, 0f, 4 * dpScale, 0x60194C61.toInt())
         canvas.drawRoundRect(buttonRect, buttonRadius, buttonRadius, buttonPaint)
         buttonPaint.clearShadowLayer()
         
         // Button border
         val buttonBorderPaint = Paint().apply {
-            color = COLOR_TEAL_BRIGHT
+            color = colorTealBright
             isAntiAlias = true
             style = Paint.Style.STROKE
             strokeWidth = 1.5f * dpScale
@@ -1094,6 +1191,115 @@ class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
         canvas.drawRoundRect(buttonRect, buttonRadius, buttonRadius, buttonBorderPaint)
         
         canvas.drawText("CONTINUE TO LEVEL ${level + 1}", screenWidth / 2, buttonY + buttonHeight * 0.62f, buttonTextPaint)
+        
+        // Home button
+        val homeButtonY = buttonY + buttonHeight + 16 * dpScale
+        val homeButtonRect = RectF(buttonX, homeButtonY, buttonX + buttonWidth, homeButtonY + buttonHeight)
+        val homeButtonRadius = buttonHeight / 2
+        levelCompleteHomeBtn = homeButtonRect
+        buttonPaint.color = colorBgCard
+        buttonPaint.setShadowLayer(8 * dpScale, 0f, 4 * dpScale, 0x40000000.toInt())
+        canvas.drawRoundRect(homeButtonRect, homeButtonRadius, homeButtonRadius, buttonPaint)
+        buttonPaint.clearShadowLayer()
+        val homeBorderPaint = Paint().apply {
+            color = colorTealAccent
+            isAntiAlias = true
+            style = Paint.Style.STROKE
+            strokeWidth = 1.5f * dpScale
+            alpha = 180
+        }
+        canvas.drawRoundRect(homeButtonRect, homeButtonRadius, homeButtonRadius, homeBorderPaint)
+        canvas.drawText("HOME", screenWidth / 2, homeButtonY + buttonHeight * 0.62f, buttonTextPaint)
+    }
+
+    private fun drawLevelSelectOverlay(canvas: Canvas) {
+        overlayAlpha = min(1f, overlayAlpha + 0.04f)
+        overlayPaint.alpha = (200 * overlayAlpha).toInt()
+        canvas.drawRect(0f, 0f, screenWidth, screenHeight, overlayPaint)
+
+        popupScale = popupScale + (popupTargetScale - popupScale) * 0.18f
+
+        canvas.save()
+        canvas.translate(screenWidth / 2, screenHeight / 2)
+        canvas.scale(popupScale, popupScale)
+        canvas.translate(-screenWidth / 2, -screenHeight / 2)
+
+        // Background card
+        val cardW = screenWidth * 0.85f
+        val cardH = screenHeight * 0.75f
+        val cardX = (screenWidth - cardW) / 2
+        val cardY = (screenHeight - cardH) / 2
+        val cardRect = RectF(cardX, cardY, cardX + cardW, cardY + cardH)
+        val radius = 24 * dpScale
+
+        val shadow = Paint().apply {
+            color = COLOR_BLACK
+            isAntiAlias = true
+            setShadowLayer(25 * dpScale, 0f, 8 * dpScale, 0x80000000.toInt())
+        }
+        canvas.drawRoundRect(cardRect, radius, radius, shadow)
+
+        val cardBg = Paint().apply {
+            color = colorBgCard
+            isAntiAlias = true
+        }
+        canvas.drawRoundRect(cardRect, radius, radius, cardBg)
+
+        cardBorderPaint.color = colorTealAccent
+        cardBorderPaint.strokeWidth = 1.5f * dpScale
+        cardBorderPaint.alpha = 200
+        canvas.drawRoundRect(cardRect, radius, radius, cardBorderPaint)
+
+        canvas.drawText("SELECT LEVEL", screenWidth / 2, cardY + 70 * dpScale, titlePaint)
+
+        // Level buttons grid
+        levelSelectBtns.clear()
+        val cols = 3
+        val btnW = 70f * dpScale
+        val btnH = 70f * dpScale
+        val gap = 16f * dpScale
+        val totalW = cols * btnW + (cols - 1) * gap
+        val startX = (screenWidth - totalW) / 2
+        val startY = cardY + 130 * dpScale
+        val rows = 4
+
+        for (row in 0 until rows) {
+            for (col in 0 until cols) {
+                val lvl = row * cols + col + 1
+                if (lvl > 20) break
+                val bx = startX + col * (btnW + gap)
+                val by = startY + row * (btnH + gap)
+                val rect = RectF(bx, by, bx + btnW, by + btnH)
+                levelSelectBtns.add(rect)
+                val unlocked = lvl <= level
+                val btnPaint = Paint().apply {
+                    color = if (unlocked) colorTealAccent else colorTextMuted
+                    isAntiAlias = true
+                }
+                canvas.drawRoundRect(rect, radius / 3, radius / 3, btnPaint)
+                val txtPaint = Paint().apply {
+                    color = if (unlocked) colorTextPrimary else colorTextMuted
+                    textSize = 24 * dpScale
+                    isAntiAlias = true
+                    textAlign = Paint.Align.CENTER
+                    typeface = android.graphics.Typeface.DEFAULT_BOLD
+                }
+                canvas.drawText("$lvl", rect.centerX(), rect.centerY() + 8 * dpScale, txtPaint)
+            }
+        }
+
+        // Home / back button
+        val homeBtnW = 160f * dpScale
+        val homeBtnH = 48f * dpScale
+        levelSelectHomeBtn = RectF(
+            screenWidth / 2 - homeBtnW / 2,
+            cardY + cardH - 70 * dpScale,
+            screenWidth / 2 + homeBtnW / 2,
+            cardY + cardH - 70 * dpScale + homeBtnH
+        )
+        drawHomeButton(canvas, levelSelectHomeBtn, "HOME", colorTealAccent)
+
+        canvas.restore()
     }
 
     private fun drawTrophyIcon(canvas: Canvas, cx: Float, cy: Float) {
@@ -1155,7 +1361,7 @@ class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
         
         val transitionAlpha = kotlin.math.sin(levelTransitionProgress * PI.toFloat())
         val overlayPaint = Paint().apply {
-            color = COLOR_TEAL_ACCENT
+            color = colorTealAccent
             alpha = (120 * transitionAlpha).toInt()
             isAntiAlias = true
         }
@@ -1163,12 +1369,12 @@ class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
         
         // Level text
         val textPaint = Paint(titlePaint).apply {
-            color = COLOR_TEXT_PRIMARY
+            color = colorTextPrimary
             alpha = (255 * transitionAlpha).toInt()
         }
         canvas.drawText("LEVEL $level", screenWidth / 2, screenHeight / 2 - 20 * dpScale, textPaint)
         canvas.drawText("GET READY!", screenWidth / 2, screenHeight / 2 + 60 * dpScale,
-            Paint().apply { color = COLOR_TEXT_SECONDARY; textSize = 26 * dpScale; isAntiAlias = true; textAlign = Paint.Align.CENTER; alpha = (200 * transitionAlpha).toInt() })
+            Paint().apply { color = colorTextSecondary; textSize = 26 * dpScale; isAntiAlias = true; textAlign = Paint.Align.CENTER; alpha = (200 * transitionAlpha).toInt() })
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -1179,12 +1385,13 @@ class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
 
                 when (gameState) {
                     GameState.PLAYING -> {
-                        // Check if touch is on striker area for shooting
-                        if (touchY > gameAreaBottom + 20 * dpScale && 
-                            touchX >= striker.x - striker.width / 2 && 
+                        // Check if touch is on striker area for shooting (long-press)
+                        if (touchY > gameAreaBottom + 20 * dpScale &&
+                            touchX >= striker.x - striker.width / 2 &&
                             touchX <= striker.x + striker.width / 2) {
-                            // Shoot straight up
-                            shootProjectile()
+                            strikerTouching = true
+                            longPressStartTime = System.currentTimeMillis()
+                            isLongPressShooting = false
                         } else {
                             // Move striker horizontally
                             striker.updatePosition(
@@ -1193,15 +1400,62 @@ class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
                             )
                         }
                     }
-                    GameState.WAITING_START, GameState.GAME_OVER -> {
+                    GameState.HOME -> {
+                        if (popupScale > 0.9f) {
+                            val cx = screenWidth / 2f
+                            val cy = screenHeight / 2f
+                            val invX = (touchX - cx) / popupScale + cx
+                            val invY = (touchY - cy) / popupScale + cy
+                            if (homeLevelBtn.contains(invX, invY)) {
+                                startGame()
+                            } else if (homeLevelsBtn.contains(invX, invY)) {
+                                goToLevelSelect()
+                            } else if (homeThemeBtn.contains(invX, invY)) {
+                                toggleTheme()
+                            } else {
+                                startGame()
+                            }
+                        }
+                    }
+                    GameState.GAME_OVER -> {
                         popupTargetScale = 1f
                         overlayAlpha = 0f
                         startGame()
                     }
                     GameState.LEVEL_COMPLETE -> {
-                        popupTargetScale = 1f
-                        overlayAlpha = 0f
-                        startGame()
+                        if (popupScale > 0.9f) {
+                            val cx = screenWidth / 2f
+                            val cy = screenHeight / 2f
+                            val invX = (touchX - cx) / popupScale + cx
+                            val invY = (touchY - cy) / popupScale + cy
+                            if (levelCompleteHomeBtn.contains(invX, invY)) {
+                                goToHome()
+                            } else {
+                                startGame()
+                            }
+                        }
+                    }
+                    GameState.LEVEL_SELECT -> {
+                        if (popupScale > 0.9f) {
+                            val cx = screenWidth / 2f
+                            val cy = screenHeight / 2f
+                            val invX = (touchX - cx) / popupScale + cx
+                            val invY = (touchY - cy) / popupScale + cy
+                            if (levelSelectHomeBtn.contains(invX, invY)) {
+                                goToHome()
+                            } else {
+                                for (i in levelSelectBtns.indices) {
+                                    if (levelSelectBtns[i].contains(invX, invY)) {
+                                        val lvl = i + 1
+                                        if (lvl <= level) {
+                                            this.level = lvl
+                                            startGame()
+                                        }
+                                        break
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
                 invalidate()
@@ -1213,11 +1467,18 @@ class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
 
                 when (gameState) {
                     GameState.PLAYING -> {
-                        // Move striker horizontally
-                        striker.updatePosition(
-                            max(striker.width / 2, min(screenWidth - striker.width / 2, touchX)),
-                            strikerY
-                        )
+                        if (strikerTouching) {
+                            // Activate continuous shooting after long-press delay
+                            if (System.currentTimeMillis() - longPressStartTime >= longPressDelay) {
+                                isLongPressShooting = true
+                            }
+                        } else {
+                            // Move striker horizontally
+                            striker.updatePosition(
+                                max(striker.width / 2, min(screenWidth - striker.width / 2, touchX)),
+                                strikerY
+                            )
+                        }
                     }
                     else -> {}
                 }
@@ -1225,11 +1486,12 @@ class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
                 return true
             }
             MotionEvent.ACTION_UP -> {
-                // No action needed on release
+                strikerTouching = false
+                isLongPressShooting = false
             }
         }
         return super.onTouchEvent(event)
-}
+    }
     
     private fun destroyBlock(block: Block) {
         block.startDestroyAnimation()
@@ -1308,6 +1570,14 @@ class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
         }
         
         if (gameState != GameState.PLAYING) return
+
+        // Continuous shooting while long-pressing the striker
+        if (isLongPressShooting) {
+            val now = System.currentTimeMillis()
+            if (now - lastShotTime >= shotCooldown) {
+                shootProjectile()
+            }
+        }
 
         // Update blocks
         val iterator = blocks.iterator()
@@ -1424,4 +1694,23 @@ class GameView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
     fun getScore(): Int = score
     fun getLevel(): Int = level
     fun getLevelScore(): Int = levelScore
+
+    fun goToHome() {
+        gameState = GameState.HOME
+        popupTargetScale = 1f
+        overlayAlpha = 0f
+        invalidate()
+    }
+
+    fun goToLevelSelect() {
+        gameState = GameState.LEVEL_SELECT
+        popupTargetScale = 1f
+        overlayAlpha = 0f
+        invalidate()
+    }
+
+    fun toggleTheme() {
+        isDarkTheme = !isDarkTheme
+        invalidate()
+    }
 }

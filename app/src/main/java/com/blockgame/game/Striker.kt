@@ -75,27 +75,36 @@ class Striker(
 
     private fun drawGlowRings(canvas: Canvas) {
         val baseRadius = width * 0.5f
-        val pulse = 1f + 0.12f * kotlin.math.sin(pulsePhase)
+        val pulse = 1f + 0.15f * kotlin.math.sin(pulsePhase)
         
-        // Outer glow rings - teal
-        for (i in 0..2) {
-            val ringRadius = baseRadius * pulse + i * 12f
-            val ringAlpha = (50f * (1f - i * 0.28f) / pulse).toInt()
+        // Outer glow rings - teal (more prominent)
+        for (i in 0..3) {
+            val ringRadius = baseRadius * pulse + i * 14f
+            val ringAlpha = (45f * (1f - i * 0.22f) / pulse).toInt()
             
             glowPaint.color = 0xFF194C61.toInt() // Teal
             glowPaint.alpha = ringAlpha
             canvas.drawCircle(x, y, ringRadius, glowPaint)
         }
         
-        // Pulsing ring - teal bright
-        val ringPaint = Paint().apply {
+        // Strong pulsing outer ring - teal bright
+        val pulseRing = Paint().apply {
             isAntiAlias = true
             style = Paint.Style.STROKE
-            strokeWidth = 2f
+            strokeWidth = 3f
         }
-        ringPaint.color = 0xFF2A7A9A.toInt() // Brighter teal
-        ringPaint.alpha = (160 * (0.5f + 0.5f * kotlin.math.sin(pulsePhase * 1.5f))).toInt()
-        canvas.drawCircle(x, y, baseRadius * pulse, ringPaint)
+        pulseRing.color = 0xFF2A7A9A.toInt() // Brighter teal
+        pulseRing.alpha = (200 * (0.5f + 0.5f * kotlin.math.sin(pulsePhase * 1.5f))).toInt()
+        canvas.drawCircle(x, y, baseRadius * pulse + 8f, pulseRing)
+        
+        // Inner glow fill
+        val innerGlow = Paint().apply {
+            isAntiAlias = true
+            style = Paint.Style.FILL
+        }
+        innerGlow.color = 0xFF2A7A9A.toInt()
+        innerGlow.alpha = (60 * (0.6f + 0.4f * kotlin.math.sin(pulsePhase))).toInt()
+        canvas.drawCircle(x, y, baseRadius * 0.55f * pulse, innerGlow)
     }
 
     private fun drawStrikerBody(canvas: Canvas) {
